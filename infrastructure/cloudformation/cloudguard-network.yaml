@@ -1,0 +1,206 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CLOUDGUARD secure networking lab.
+  Creates an isolated VPC with public and private subnets,
+  explicit route tables, an Internet Gateway, and a restrictive
+  Security Group. No compute instances, NAT Gateways, or public
+  IPv4 addresses are created by this template.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: cloudguard-lab
+    AllowedPattern: '^[a-z][a-z0-9-]{2,20}$'
+    Description: Prefix used for CLOUDGUARD resource names.
+
+Resources:
+  CloudGuardVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-vpc'
+        - Key: Project
+          Value: CLOUDGUARD
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  CloudGuardInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-igw'
+        - Key: Project
+          Value: CLOUDGUARD
+
+  CloudGuardInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref CloudGuardVPC
+      InternetGatewayId: !Ref CloudGuardInternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CloudGuardVPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: ap-south-1a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-a'
+        - Key: Network
+          Value: public
+        - Key: Project
+          Value: CLOUDGUARD
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CloudGuardVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: ap-south-1b
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-b'
+        - Key: Network
+          Value: public
+        - Key: Project
+          Value: CLOUDGUARD
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CloudGuardVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: ap-south-1a
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-a'
+        - Key: Network
+          Value: private
+        - Key: Project
+          Value: CLOUDGUARD
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CloudGuardVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: ap-south-1b
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-b'
+        - Key: Network
+          Value: private
+        - Key: Project
+          Value: CLOUDGUARD
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CloudGuardVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-public-rt'
+        - Key: Project
+          Value: CLOUDGUARD
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: CloudGuardInternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref CloudGuardInternetGateway
+
+  PublicSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CloudGuardVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-private-rt'
+        - Key: Project
+          Value: CLOUDGUARD
+
+  PrivateSubnetARouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
+  CloudGuardSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: CLOUDGUARD lab security group with no inbound access and HTTPS-only egress
+      VpcId: !Ref CloudGuardVPC
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow outbound HTTPS only
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-restricted-sg'
+        - Key: Project
+          Value: CLOUDGUARD
+
+Outputs:
+  VpcId:
+    Description: ID of the CLOUDGUARD VPC
+    Value: !Ref CloudGuardVPC
+  VpcCidr:
+    Description: IPv4 CIDR of the CLOUDGUARD VPC
+    Value: !GetAtt CloudGuardVPC.CidrBlock
+  InternetGatewayId:
+    Description: Internet Gateway attached to the VPC
+    Value: !Ref CloudGuardInternetGateway
+  PublicSubnetAId:
+    Description: Public subnet A
+    Value: !Ref PublicSubnetA
+  PublicSubnetBId:
+    Description: Public subnet B
+    Value: !Ref PublicSubnetB
+  PrivateSubnetAId:
+    Description: Private subnet A
+    Value: !Ref PrivateSubnetA
+  PrivateSubnetBId:
+    Description: Private subnet B
+    Value: !Ref PrivateSubnetB
+  PublicRouteTableId:
+    Description: Public route table
+    Value: !Ref PublicRouteTable
+  PrivateRouteTableId:
+    Description: Private route table without a default internet route
+    Value: !Ref PrivateRouteTable
+  SecurityGroupId:
+    Description: Restricted Security Group ID
+    Value: !Ref CloudGuardSecurityGroup
